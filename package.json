@@ -1,8 +1,8 @@
 {
     "name": "claude-proxy-status",
     "displayName": "Claude Proxy Status",
-    "description": "Status bar item to control/monitor Antigravity Claude Proxy",
-    "version": "1.0.0",
+    "description": "Status bar item to control/monitor Antigravity Claude Proxy with live dashboard",
+    "version": "1.1.0",
     "publisher": "ai-dev-2024",
     "repository": {
         "type": "git",
