@@ -1,57 +1,75 @@
 # Antigravity Proxy Status
 
-VS Code extension for Antigravity Claude Proxy - multi-account management and model switching.
+VS Code extension for Antigravity Claude Proxy - real-time quota monitoring, multi-account management, and instant model switching.
 
-## Features
+![Quota Popup](screenshot-quota-popup.png)
 
-### 🧠 Model Switching
-- **Status bar model display** - Shows current model at a glance
-- **One-click switching** - Click model name to switch between Flash, Pro, Opus, Sonnet, and more
-- **Window-local** - Each VS Code window can have its own model selection
+## ✨ Key Features
 
-### 👤 Account Management
-- **Account status icon** - Shows signed-in accounts in status bar
-- **Rich hover tooltip** - View all connected accounts with one hover
-- **Quick sign-in** - Sign in with Google, GitHub, or Microsoft
-- **Session tracking** - Automatically detects auth changes
+### 📊 Real-Time Quota Monitoring
+- **Click to view quotas** - Click the account icon to see Claude & Gemini quota status
+- **Per-model breakdown** - See individual quotas for Opus, Sonnet, Flash, Pro
+- **Reset time display** - Know exactly when your quota resets
+- **Smart account sorting** - Accounts with highest Claude quota shown first (helps when manually switching Antigravity accounts)
 
-### 📊 Dashboard Access
-- **One-click dashboard** - Click server icon to open proxy dashboard
-- **View quotas** - Check usage limits and reset times
+### 🧠 Instant Model Switching
+- **One-click switching** - Click model name in status bar to switch models
+- **Supported models**: Flash ⚡, Pro 💎, Opus 🎭, Sonnet 🎵, Grok 🌐, Perplexity 🔍
+- **Instant sync** - Model changes sync immediately with proxy
+
+![Model Switcher](screenshot-model-switcher.png)
+
+### 👤 Status Bar Integration
+- **Account icon** - Shows proxy connection status
+- **Model display** - Current model with emoji indicator
+- **Offline detection** - Shows "Offline" in red when proxy is down
+
+![Status Bar](screenshot-statusbar.png)
 
 ## Status Bar Layout
 
-From left to right:
-1. **$(account)** Account icon - Click to manage accounts
-2. **Model name** - Click to switch models (shows "Offline" in red when proxy is down)
+| Icon | Description | Click Action |
+|------|-------------|--------------|
+| 👤 | Account/Quota | Opens quota popup with all accounts |
+| 💎 Pro | Current model | Opens model switcher |
+
+## Quota Popup Features
+
+When you click the account icon:
+
+1. **Model Quotas** - Overall Claude and Gemini percentages with visual bars
+2. **Google Accounts** - All connected accounts sorted by Claude availability
+3. **Reset Times** - Shows when each account's quota resets
+4. **Open Dashboard** - Quick link to full proxy dashboard
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `Antigravity: Switch Model` | Choose a different AI model |
-| `Antigravity: Switch IDE Account` | Open IDE account manager |
 | `Antigravity: Open Dashboard` | Open proxy dashboard in browser |
 
 ## Requirements
 
 - Antigravity Proxy running on `localhost:8080`
-- VS Code / Antigravity 1.80.0 or newer
+- VS Code / Antigravity 1.80.0+
 
 ## Installation
 
+### From Open VSX (Recommended)
+Search "Antigravity Proxy Status" in extensions marketplace.
+
+### From VSIX
 ```powershell
-# From packaged VSIX
-antigravity --install-extension claude-proxy-status-2.5.0.vsix
+antigravity --install-extension claude-proxy-status-3.9.2.vsix
 ```
 
-Or install from marketplace.
+## Advanced Features
 
-## Publishing
-
-```powershell
-./publish.ps1
-```
+- **Auto-account rotation** - Proxy automatically switches to next account when quota exhausted
+- **Multi-account support** - Connect unlimited Google accounts via dashboard
+- **Visual quota bars** - Color-coded (filled/empty blocks) for quick status reading
+- **Instant polling** - 5-second refresh for real-time quota updates
 
 ## License
 
