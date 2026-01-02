@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { exec } = require('child_process');
+const crypto = require('crypto');
 
 // ==================== STATE ====================
 let quotaStatusBarItem = null;        // Shows quota summary on hover
@@ -16,6 +17,12 @@ let settingsWatcher = null;           // File watcher for Claude Code settings
 let proxyQuotaData = null;            // Quota data from proxy /account-limits
 let currentIDEAccount = null;         // Antigravity signed-in account
 let lastTooltipData = null;           // Cache to prevent tooltip flickering
+
+// Per-window model persistence
+let extensionContext = null;          // Store context for workspaceState access
+let isFirstConnect = true;            // Track first connection to proxy
+let windowId = null;                  // Unique window identifier
+const WINDOW_MODEL_KEY = 'antigravity.windowModel';  // workspaceState key for per-window model
 
 // Configuration
 const PROXY_POLL_INTERVAL_MS = 5000;
@@ -35,7 +42,27 @@ const MODELS = [
 // ==================== ACTIVATION ====================
 
 function activate(context) {
-    console.log('[Claude Proxy] Extension v2.8.0 activated');
+    console.log('[Claude Proxy] Extension v3.0.0 activated');
+
+    // Store context for workspaceState access in other functions
+    extensionContext = context;
+
+    // Generate or retrieve unique window ID
+    windowId = context.globalState.get('antigravity.windowId');
+    if (!windowId) {
+        windowId = crypto.randomUUID();
+        context.globalState.update('antigravity.windowId', windowId);
+        console.log(`[Claude Proxy] Generated new window ID: ${windowId.slice(0, 8)}...`);
+    }
+
+    // Load saved window-local model (persists per-workspace)
+    const savedWindowModel = context.workspaceState.get(WINDOW_MODEL_KEY);
+    if (savedWindowModel) {
+        currentModel = savedWindowModel;
+        isFirstConnect = false;  // Don't override with proxy model
+        console.log(`[Claude Proxy] Loaded saved model for this window: ${savedWindowModel}`);
+    }
+
 
     // ==================== STATUS BAR ITEMS (2 icons) ====================
 
@@ -594,9 +621,19 @@ function checkProxyHealth() {
             try {
                 const json = JSON.parse(data);
                 isProxyOnline = true;
+
+                // Only accept proxy model on FIRST connect if no local model saved
+                // This prevents multiple windows from overwriting each other's model
                 if (json.model && json.model !== currentModel) {
-                    currentModel = json.model;
+                    const hasSavedModel = extensionContext && extensionContext.workspaceState.get(WINDOW_MODEL_KEY);
+                    if (isFirstConnect && !hasSavedModel) {
+                        console.log(`[Claude Proxy] First connect - using proxy model: ${json.model}`);
+                        currentModel = json.model;
+                    }
+                    // Otherwise, keep local model - don't let proxy override
                 }
+                isFirstConnect = false;
+
                 updateModelStatusBar();
                 updateQuotaStatusBar();
             } catch (e) {
@@ -615,6 +652,7 @@ function checkProxyHealth() {
     req.on('timeout', () => req.destroy());
     req.end();
 }
+
 
 function setModelOnProxy(model) {
     return new Promise((resolve, reject) => {
@@ -635,6 +673,11 @@ function setModelOnProxy(model) {
             res.on('end', () => {
                 if (res.statusCode === 200) {
                     currentModel = model;
+                    // Save to workspaceState for per-window persistence
+                    if (extensionContext) {
+                        extensionContext.workspaceState.update(WINDOW_MODEL_KEY, model);
+                        console.log(`[Claude Proxy] Saved window model: ${model}`);
+                    }
                     updateModelStatusBar();
                     vscode.window.showInformationMessage(`🧠 Model: ${getDisplayName(model)}`);
                     resolve();
@@ -660,7 +703,7 @@ function updateModelStatusBar() {
         modelStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     } else {
         modelStatusBarItem.text = getDisplayName(currentModel);
-        modelStatusBarItem.tooltip = `Model: ${currentModel}\nClick to switch`;
+        modelStatusBarItem.tooltip = `This Window: ${currentModel}\nClick to switch (per-window)`;
         modelStatusBarItem.backgroundColor = undefined;
     }
 }
