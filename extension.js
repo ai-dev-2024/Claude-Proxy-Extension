@@ -5,13 +5,13 @@ const path = require('path');
 const os = require('os');
 
 // ==================== STATE ====================
-let accountStatusBarItem = null;      // $(account) Account icon
+let quotaStatusBarItem = null;        // Shows quota summary on hover
 let modelStatusBarItem = null;        // Model name (shows "Offline" in red when down)
 let currentModel = 'unknown';
 let isProxyOnline = false;
 let pollInterval = null;
-let currentIDEAccount = null;         // Current Antigravity IDE account info
 let settingsWatcher = null;           // File watcher for Claude Code settings
+let proxyQuotaData = null;            // Quota data from proxy /account-limits
 
 // Configuration
 const PROXY_POLL_INTERVAL_MS = 5000;
@@ -30,18 +30,18 @@ const MODELS = [
 // ==================== ACTIVATION ====================
 
 function activate(context) {
-    console.log('[Claude Proxy] Extension v3.7.0 activated');
+    console.log('[Claude Proxy] Extension v2.6.0 activated');
 
-    // ==================== STATUS BAR ITEMS (2 icons only) ====================
+    // ==================== STATUS BAR ITEMS (2 icons) ====================
 
-    // 1. Account Status Bar (priority 101 - left)
-    accountStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 101);
-    accountStatusBarItem.text = '$(account)';
-    accountStatusBarItem.command = 'antigravity.switchIDEAccount';
-    accountStatusBarItem.show();
-    context.subscriptions.push(accountStatusBarItem);
+    // 1. Quota Status Bar (priority 101 - left) - Shows quota on hover
+    quotaStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 101);
+    quotaStatusBarItem.text = '$(graph) ...';
+    quotaStatusBarItem.command = 'antigravity.openDashboard';
+    quotaStatusBarItem.show();
+    context.subscriptions.push(quotaStatusBarItem);
 
-    // 2. Model Status Bar (priority 100 - right of account)
+    // 2. Model Status Bar (priority 100 - right of quota)
     modelStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     modelStatusBarItem.text = '$(sync~spin) ...';
     modelStatusBarItem.tooltip = 'Connecting to proxy...';
@@ -69,50 +69,25 @@ function activate(context) {
         })
     );
 
-    // IDE Account Switcher - Opens VS Code's native account manager
-    context.subscriptions.push(
-        vscode.commands.registerCommand('antigravity.switchIDEAccount', async () => {
-            try {
-                await vscode.commands.executeCommand('workbench.action.accounts');
-            } catch (e) {
-                vscode.window.showInformationMessage(
-                    'Click your profile icon (top-right) to switch accounts'
-                );
-            }
-        })
-    );
-
-    // ==================== IDE ACCOUNT TRACKING ====================
-
-    // Initial fetch of IDE account info
-    updateIDEAccountInfo();
-
-    // Listen for authentication changes
-    context.subscriptions.push(
-        vscode.authentication.onDidChangeSessions(() => {
-            updateIDEAccountInfo();
-        })
-    );
-
     // ==================== POLLING ====================
     checkProxyHealth();
+    fetchProxyQuotaData();
     pollInterval = setInterval(() => {
         checkProxyHealth();
-        updateIDEAccountInfo(); // Also refresh account info
+        fetchProxyQuotaData();
     }, PROXY_POLL_INTERVAL_MS);
 
     // ==================== WATCH CLAUDE CODE SETTINGS ====================
-    // Instantly update status bar when user changes model in Claude Code UI
     watchClaudeSettings();
 
-    // Also listen for VS Code configuration changes (claudeCode.selectedModel)
+    // Listen for VS Code configuration changes
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration('claudeCode.selectedModel')) {
                 const config = vscode.workspace.getConfiguration('claudeCode');
                 const newModel = config.get('selectedModel');
                 if (newModel && newModel !== currentModel) {
-                    console.log(`[Claude Proxy] VS Code config changed: claudeCode.selectedModel = ${newModel}`);
+                    console.log(`[Claude Proxy] Config changed: selectedModel = ${newModel}`);
                     currentModel = newModel;
                     updateModelStatusBar();
                     setModelOnProxy(newModel);
@@ -129,91 +104,151 @@ function activate(context) {
     });
 }
 
-// ==================== IDE ACCOUNT FUNCTIONS ====================
+// ==================== QUOTA STATUS BAR ====================
 
-async function updateIDEAccountInfo() {
-    try {
-        // Antigravity uses 'google' as the primary auth provider
-        const providers = ['google', 'github', 'microsoft'];
-        let allAccounts = [];
-        let primaryAccount = null;
+function updateQuotaStatusBar() {
+    if (!quotaStatusBarItem) return;
 
-        for (const provider of providers) {
+    if (!isProxyOnline) {
+        quotaStatusBarItem.text = '$(warning)';
+        quotaStatusBarItem.tooltip = 'Proxy offline';
+        return;
+    }
+
+    if (proxyQuotaData && proxyQuotaData.claudeQuota !== null) {
+        // Show mini quota bar
+        const claudePct = proxyQuotaData.claudeQuota;
+        const geminiPct = proxyQuotaData.geminiQuota;
+
+        // Show the lower of the two as indicator
+        const minQuota = Math.min(claudePct, geminiPct);
+        const icon = minQuota > 50 ? '$(graph)' : minQuota > 20 ? '$(warning)' : '$(error)';
+        quotaStatusBarItem.text = icon;
+        quotaStatusBarItem.tooltip = createQuotaTooltip();
+    } else {
+        quotaStatusBarItem.text = '$(graph)';
+        quotaStatusBarItem.tooltip = 'Click to open dashboard';
+    }
+}
+
+// ==================== QUOTA DATA ====================
+
+function fetchProxyQuotaData() {
+    const req = http.request({
+        hostname: 'localhost',
+        port: 8080,
+        path: '/account-limits',
+        method: 'GET',
+        timeout: 5000
+    }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
             try {
-                // Use getSession with silent mode (how Antigravity works)
-                const session = await vscode.authentication.getSession(provider, [], {
-                    createIfNone: false,
-                    silent: true
-                });
-
-                if (session) {
-                    const accountInfo = {
-                        provider: provider,
-                        email: session.account.label,
-                        id: session.account.id
-                    };
-                    allAccounts.push(accountInfo);
-
-                    // First account found is the active one (Google preferred for Antigravity)
-                    if (!primaryAccount) {
-                        primaryAccount = accountInfo;
-                    }
-                }
+                const json = JSON.parse(data);
+                proxyQuotaData = processQuotaData(json);
+                updateQuotaStatusBar();
             } catch (e) {
-                // Provider not available or no session, continue
+                console.log('[Claude Proxy] Could not parse quota data:', e.message);
+            }
+        });
+    });
+
+    req.on('error', () => {
+        proxyQuotaData = null;
+        updateQuotaStatusBar();
+    });
+    req.on('timeout', () => req.destroy());
+    req.end();
+}
+
+// Process quota data - aggregate by model family
+function processQuotaData(json) {
+    if (!json || !json.accounts || json.accounts.length === 0) {
+        return { claudeQuota: null, geminiQuota: null, accounts: [], models: {} };
+    }
+
+    const accounts = json.accounts;
+    const modelQuotas = {}; // { modelId: [pct1, pct2, ...] }
+    const accountSummaries = [];
+
+    for (const acc of accounts) {
+        if (acc.status !== 'ok' || !acc.limits) continue;
+
+        for (const [modelId, info] of Object.entries(acc.limits)) {
+            if (info.remainingFraction !== undefined && info.remainingFraction !== null) {
+                const pct = Math.round(info.remainingFraction * 100);
+                if (!modelQuotas[modelId]) modelQuotas[modelId] = [];
+                modelQuotas[modelId].push(pct);
             }
         }
 
-        if (primaryAccount) {
-            currentIDEAccount = {
-                ...primaryAccount,
-                allAccounts: allAccounts
-            };
-        } else {
-            currentIDEAccount = null;
-        }
-
-        // Update tooltip with current account info
-        if (accountStatusBarItem) {
-            accountStatusBarItem.tooltip = createAccountTooltip();
-        }
-    } catch (e) {
-        console.log('[Claude Proxy] Could not fetch IDE account info:', e.message);
+        accountSummaries.push({
+            email: acc.email,
+            limits: acc.limits
+        });
     }
+
+    // Aggregate by family - use MINIMUM across accounts (conservative)
+    let claudeQuota = null;
+    let geminiQuota = null;
+    const claudeModels = [];
+    const geminiModels = [];
+
+    for (const [modelId, pcts] of Object.entries(modelQuotas)) {
+        const minPct = Math.min(...pcts);
+
+        if (modelId.includes('claude')) {
+            claudeModels.push({ id: modelId, quota: minPct });
+            if (claudeQuota === null || minPct < claudeQuota) {
+                claudeQuota = minPct;
+            }
+        } else if (modelId.includes('gemini')) {
+            geminiModels.push({ id: modelId, quota: minPct });
+            if (geminiQuota === null || minPct < geminiQuota) {
+                geminiQuota = minPct;
+            }
+        }
+    }
+
+    return {
+        claudeQuota: claudeQuota,
+        geminiQuota: geminiQuota,
+        claudeModels: claudeModels.sort((a, b) => a.id.localeCompare(b.id)),
+        geminiModels: geminiModels.sort((a, b) => a.id.localeCompare(b.id)),
+        accounts: accountSummaries,
+        totalAccounts: json.totalAccounts || accounts.length
+    };
 }
 
 // ==================== CLAUDE CODE SETTINGS WATCHER ====================
 
 function watchClaudeSettings() {
     try {
-        // Check if the settings file exists
         if (!fs.existsSync(CLAUDE_SETTINGS_PATH)) {
             console.log('[Claude Proxy] Claude settings file not found, skipping watch');
             return;
         }
 
-        // Watch for changes to Claude Code settings
         settingsWatcher = fs.watch(CLAUDE_SETTINGS_PATH, { persistent: false }, (eventType) => {
             if (eventType === 'change') {
                 try {
                     const data = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf-8'));
                     if (data.model && data.model !== currentModel) {
-                        console.log(`[Claude Proxy] Detected model change in Claude settings: ${data.model}`);
+                        console.log(`[Claude Proxy] Detected model change: ${data.model}`);
                         currentModel = data.model;
                         updateModelStatusBar();
-
-                        // Also sync to proxy so it knows about the change
                         setModelOnProxy(data.model);
                     }
                 } catch (e) {
-                    // File might be being written, ignore parse errors
+                    // File being written, ignore
                 }
             }
         });
 
-        console.log('[Claude Proxy] Watching Claude settings for instant model sync');
+        console.log('[Claude Proxy] Watching Claude settings');
     } catch (e) {
-        console.log('[Claude Proxy] Could not watch Claude settings:', e.message);
+        console.log('[Claude Proxy] Could not watch settings:', e.message);
     }
 }
 
@@ -237,9 +272,11 @@ function checkProxyHealth() {
                     currentModel = json.model;
                 }
                 updateModelStatusBar();
+                updateQuotaStatusBar();
             } catch (e) {
                 isProxyOnline = false;
                 updateModelStatusBar();
+                updateQuotaStatusBar();
             }
         });
     });
@@ -247,6 +284,7 @@ function checkProxyHealth() {
     req.on('error', () => {
         isProxyOnline = false;
         updateModelStatusBar();
+        updateQuotaStatusBar();
     });
     req.on('timeout', () => req.destroy());
     req.end();
@@ -291,12 +329,10 @@ function updateModelStatusBar() {
     if (!modelStatusBarItem) return;
 
     if (!isProxyOnline) {
-        // Show "Offline" in red when proxy is down
         modelStatusBarItem.text = '$(warning) Offline';
         modelStatusBarItem.tooltip = 'Proxy offline - click to retry';
         modelStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     } else {
-        // Show model name when online
         modelStatusBarItem.text = getDisplayName(currentModel);
         modelStatusBarItem.tooltip = `Model: ${currentModel}\nClick to switch`;
         modelStatusBarItem.backgroundColor = undefined;
@@ -318,45 +354,70 @@ function getDisplayName(model) {
 
 // ==================== TOOLTIPS ====================
 
-function createAccountTooltip() {
+function createQuotaTooltip() {
     const md = new vscode.MarkdownString();
     md.isTrusted = true;
     md.supportThemeIcons = true;
 
-    md.appendMarkdown(`### $(account) AntiGravity IDE Account\n\n`);
+    md.appendMarkdown(`### $(graph) Model Quotas\n\n`);
 
-    if (currentIDEAccount) {
-        // Show current/primary account
-        const providerIcon = getProviderIcon(currentIDEAccount.provider);
-        md.appendMarkdown(`**Active:** ${providerIcon} ${currentIDEAccount.email}\n\n`);
+    if (!proxyQuotaData) {
+        md.appendMarkdown(`$(warning) *Loading...*\n\n`);
+        md.appendMarkdown(`[$(link-external) Open Dashboard](command:antigravity.openDashboard)`);
+        return md;
+    }
 
-        // Show all logged-in accounts if multiple
-        const allAccounts = currentIDEAccount.allAccounts || [];
-        if (allAccounts.length > 1) {
-            md.appendMarkdown(`**All accounts:**\n`);
-            for (const acc of allAccounts) {
-                const icon = getProviderIcon(acc.provider);
-                md.appendMarkdown(`- ${icon} ${acc.email}\n`);
+    // Claude models section
+    if (proxyQuotaData.claudeQuota !== null) {
+        md.appendMarkdown(`**Claude**\n`);
+        const claudeBar = createQuotaBar(proxyQuotaData.claudeQuota);
+        md.appendMarkdown(`${claudeBar} ${proxyQuotaData.claudeQuota}%\n\n`);
+
+        // Show individual Claude models
+        if (proxyQuotaData.claudeModels && proxyQuotaData.claudeModels.length > 0) {
+            for (const model of proxyQuotaData.claudeModels.slice(0, 3)) {
+                const shortName = model.id.replace('claude-', '').replace('-thinking', '');
+                md.appendMarkdown(`  • ${shortName}: ${model.quota}%\n`);
             }
             md.appendMarkdown(`\n`);
         }
-    } else {
-        md.appendMarkdown(`*No account signed in*\n\n`);
     }
 
+    // Gemini models section
+    if (proxyQuotaData.geminiQuota !== null) {
+        md.appendMarkdown(`**Gemini**\n`);
+        const geminiBar = createQuotaBar(proxyQuotaData.geminiQuota);
+        md.appendMarkdown(`${geminiBar} ${proxyQuotaData.geminiQuota}%\n\n`);
+
+        // Show individual Gemini models
+        if (proxyQuotaData.geminiModels && proxyQuotaData.geminiModels.length > 0) {
+            for (const model of proxyQuotaData.geminiModels.slice(0, 3)) {
+                const shortName = model.id.replace('gemini-', '');
+                md.appendMarkdown(`  • ${shortName}: ${model.quota}%\n`);
+            }
+            md.appendMarkdown(`\n`);
+        }
+    }
+
+    if (proxyQuotaData.claudeQuota === null && proxyQuotaData.geminiQuota === null) {
+        md.appendMarkdown(`$(info) *No quota data available*\n\n`);
+    }
+
+    // Footer
     md.appendMarkdown(`---\n\n`);
-    md.appendMarkdown(`[$(account) Switch Account](command:antigravity.switchIDEAccount) · `);
-    md.appendMarkdown(`[$(server) Proxy Dashboard](command:antigravity.openDashboard)`);
+    if (proxyQuotaData.totalAccounts) {
+        md.appendMarkdown(`$(server) ${proxyQuotaData.totalAccounts} account(s)\n\n`);
+    }
+    md.appendMarkdown(`[$(link-external) Open Dashboard](command:antigravity.openDashboard)`);
+
     return md;
 }
 
-function getProviderIcon(provider) {
-    switch (provider) {
-        case 'google': return '🔵';
-        case 'github': return '⚫';
-        case 'microsoft': return '🟦';
-        default: return '👤';
-    }
+function createQuotaBar(percent) {
+    const filled = Math.round(percent / 10);
+    const empty = 10 - filled;
+    const color = percent > 50 ? '🟩' : percent > 20 ? '🟨' : '🟥';
+    return color.repeat(filled) + '⬜'.repeat(empty);
 }
 
 // ==================== DEACTIVATION ====================
@@ -367,3 +428,4 @@ function deactivate() {
 }
 
 module.exports = { activate, deactivate };
+

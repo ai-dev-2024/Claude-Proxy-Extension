@@ -1,8 +1,8 @@
 {
     "name": "claude-proxy-status",
     "displayName": "Antigravity Proxy Status",
-    "description": "Model switching for Antigravity Claude Proxy with IDE account switcher",
-    "version": "3.8.0",
+    "description": "Model switching with account & quota display for Antigravity Claude Proxy",
+    "version": "2.6.0",
     "publisher": "ai-dev-2024",
     "repository": {
         "type": "git",
@@ -37,10 +37,6 @@
             {
                 "command": "antigravity.switchModel",
                 "title": "Antigravity: Switch Model"
-            },
-            {
-                "command": "antigravity.switchIDEAccount",
-                "title": "Antigravity: Switch IDE Account"
             }
         ]
     }

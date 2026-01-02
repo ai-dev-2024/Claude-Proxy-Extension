@@ -42,7 +42,7 @@ From left to right:
 
 ```powershell
 # From packaged VSIX
-antigravity --install-extension claude-proxy-status-3.6.0.vsix
+antigravity --install-extension claude-proxy-status-2.5.0.vsix
 ```
 
 Or install from marketplace.
