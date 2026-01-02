@@ -22,27 +22,31 @@ VS Code extension for Antigravity Claude Proxy - multi-account management and mo
 ## Status Bar Layout
 
 From left to right:
-1. **$(account)** Account icon - Click to manage accounts
-2. **Model name** - Click to switch models (shows "Offline" in red when proxy is down)
+1. **👤** Account icon - Click to manage accounts
+2. **$(server)** Proxy status - Click to open dashboard  
+3. **Model name** - Click to switch models
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `Antigravity: Switch Model` | Choose a different AI model |
-| `Antigravity: Switch IDE Account` | Open IDE account manager |
+| `Antigravity: Switch Account` | Manage signed-in accounts |
+| `Antigravity: Add Account` | Sign in with a new account |
+| `Antigravity: Refresh Account Status` | Reload account list |
 | `Antigravity: Open Dashboard` | Open proxy dashboard in browser |
+| `Antigravity: Show Current Model` | Display current model info |
 
 ## Requirements
 
 - Antigravity Proxy running on `localhost:8080`
-- VS Code / Antigravity 1.80.0 or newer
+- VS Code 1.80.0 or newer
 
 ## Installation
 
 ```powershell
 # From packaged VSIX
-antigravity --install-extension claude-proxy-status-3.6.0.vsix
+code --install-extension claude-proxy-status-3.0.0.vsix
 ```
 
 Or install from marketplace.

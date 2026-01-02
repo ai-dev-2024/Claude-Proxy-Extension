@@ -1,8 +1,8 @@
 {
     "name": "claude-proxy-status",
     "displayName": "Antigravity Proxy Status",
-    "description": "Model switching for Antigravity Claude Proxy with IDE account switcher",
-    "version": "3.8.0",
+    "description": "Multi-account management and model switching for Antigravity Claude Proxy - view account status, switch models, manage sessions",
+    "version": "3.3.0",
     "publisher": "ai-dev-2024",
     "repository": {
         "type": "git",
@@ -22,7 +22,8 @@
         "proxy",
         "google ai",
         "gemini",
-        "model-switcher"
+        "multi-account",
+        "quota"
     ],
     "activationEvents": [
         "onStartupFinished"
@@ -39,8 +40,20 @@
                 "title": "Antigravity: Switch Model"
             },
             {
-                "command": "antigravity.switchIDEAccount",
-                "title": "Antigravity: Switch IDE Account"
+                "command": "antigravity.showCurrentModel",
+                "title": "Antigravity: Show Current Model"
+            },
+            {
+                "command": "antigravity.switchAccount",
+                "title": "Antigravity: Switch Account"
+            },
+            {
+                "command": "antigravity.addAccount",
+                "title": "Antigravity: Add Account"
+            },
+            {
+                "command": "antigravity.refreshAccounts",
+                "title": "Antigravity: Refresh Account Status"
             }
         ]
     }
