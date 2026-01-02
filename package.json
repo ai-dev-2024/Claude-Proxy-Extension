@@ -2,7 +2,7 @@
     "name": "claude-proxy-status",
     "displayName": "Antigravity Proxy Status",
     "description": "Model switching with account & quota display for Antigravity Claude Proxy",
-    "version": "4.0.0",
+    "version": "4.1.0",
     "publisher": "ai-dev-2024",
     "repository": {
         "type": "git",

@@ -39,10 +39,51 @@ const MODELS = [
     { label: '🔍 Perplexity', model: 'sonar', description: 'Search focused' },
 ];
 
+// ==================== PROXY AUTO-START ====================
+
+// Ensure proxy is running - called on extension activation
+function ensureProxyRunning() {
+    const http = require('http');
+
+    // Quick check if proxy is responding
+    const req = http.request({
+        hostname: 'localhost',
+        port: 8080,
+        path: '/health',
+        method: 'GET',
+        timeout: 2000
+    }, (res) => {
+        // Proxy is running, nothing to do
+        console.log('[Claude Proxy] Proxy already running');
+    });
+
+    req.on('error', () => {
+        // Proxy is not running, start it via PM2
+        console.log('[Claude Proxy] Proxy offline, starting via PM2...');
+        const { exec } = require('child_process');
+        exec('pm2 restart antigravity-proxy || pm2 start "C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\index.js" --name antigravity-proxy', (error) => {
+            if (error) {
+                console.log('[Claude Proxy] Failed to start proxy:', error.message);
+            } else {
+                console.log('[Claude Proxy] Proxy started successfully');
+            }
+        });
+    });
+
+    req.on('timeout', () => {
+        req.destroy();
+    });
+
+    req.end();
+}
+
 // ==================== ACTIVATION ====================
 
 function activate(context) {
-    console.log('[Claude Proxy] Extension v3.0.0 activated');
+    console.log('[Claude Proxy] Extension v4.0.0 activated');
+
+    // Auto-start proxy if not running (ensures proxy is always available)
+    ensureProxyRunning();
 
     // Store context for workspaceState access in other functions
     extensionContext = context;
@@ -92,6 +133,32 @@ function activate(context) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('antigravity.switchModel', async () => {
+            // If proxy is offline, start it automatically when user selects a model
+            if (!isProxyOnline) {
+                // Show models but start proxy first
+                const selected = await vscode.window.showQuickPick(MODELS, {
+                    placeHolder: 'Proxy offline - selecting a model will start it',
+                    title: '🧠 Switch Model (Proxy Starting...)'
+                });
+
+                if (selected) {
+                    // Start the proxy via PM2
+                    const { exec } = require('child_process');
+                    exec('pm2 restart antigravity-proxy || pm2 start "C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\server.js" --name antigravity-proxy', (error) => {
+                        if (error) {
+                            vscode.window.showErrorMessage('Failed to start proxy. Run: pm2 restart antigravity-proxy');
+                        } else {
+                            vscode.window.showInformationMessage(`Proxy started! Model: ${selected.label}`);
+                            // Wait a moment then set the model
+                            setTimeout(() => {
+                                setModelOnProxy(selected.model);
+                            }, 2000);
+                        }
+                    });
+                }
+                return;
+            }
+
             const selected = await vscode.window.showQuickPick(MODELS, {
                 placeHolder: `Current: ${getDisplayName(currentModel)}`,
                 title: '🧠 Switch Model'
@@ -656,11 +723,16 @@ function checkProxyHealth() {
 
 function setModelOnProxy(model) {
     return new Promise((resolve, reject) => {
-        const postData = JSON.stringify({ model });
+        // Use session-model endpoint for per-window model isolation
+        const postData = JSON.stringify({
+            model,
+            sessionId: windowId,  // Use window's unique ID
+            name: vscode.workspace.name || 'Window'
+        });
         const req = http.request({
             hostname: 'localhost',
             port: 8080,
-            path: '/active-model',
+            path: '/session-model',  // Session-based endpoint
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -676,10 +748,10 @@ function setModelOnProxy(model) {
                     // Save to workspaceState for per-window persistence
                     if (extensionContext) {
                         extensionContext.workspaceState.update(WINDOW_MODEL_KEY, model);
-                        console.log(`[Claude Proxy] Saved window model: ${model}`);
+                        console.log(`[Claude Proxy] Saved session model: ${windowId.slice(0, 8)} -> ${model}`);
                     }
                     updateModelStatusBar();
-                    vscode.window.showInformationMessage(`🧠 Model: ${getDisplayName(model)}`);
+                    vscode.window.showInformationMessage(`🧠 Model: ${getDisplayName(model)} (this window)`);
                     resolve();
                 } else {
                     reject(new Error(data));
