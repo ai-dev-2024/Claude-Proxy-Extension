@@ -4,6 +4,23 @@ All notable changes to the VS Code extension will be documented in this file.
 
 ---
 
+## [4.1.0] - 2026-01-03
+
+### Added
+- **Per-Session Model Isolation**: Each Antigravity window has its own model
+- **Auto Proxy Restart**: Extension starts proxy if offline when switching models
+- **Session-Based API**: Uses `/session-model` endpoint with window's unique session ID
+
+### Changed
+- Model switches only affect current window, not other windows
+- Shows "(this window)" in model switch confirmation
+
+### Fixed
+- **Proxy Entry Point**: Extension now starts `index.js` instead of `server.js`
+- **Model Persistence**: Windows maintain their model across proxy restarts
+
+---
+
 ## [3.9.2] - 2026-01-02
 
 ### Added
