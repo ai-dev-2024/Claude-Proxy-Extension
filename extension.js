@@ -12,6 +12,7 @@ let quotaStatusBarItem = null;        // Shows quota summary on hover
 let modelStatusBarItem = null;        // Model name (shows "Offline" in red when down)
 let currentModel = 'unknown';
 let isProxyOnline = false;
+let isProxyEnabled = true;            // Toggle to enable/disable proxy (avoid conflicts with Antigravity Manager)
 let pollInterval = null;
 let settingsWatcher = null;           // File watcher for Claude Code settings
 let proxyQuotaData = null;            // Quota data from proxy /account-limits
@@ -80,13 +81,22 @@ function ensureProxyRunning() {
 // ==================== ACTIVATION ====================
 
 function activate(context) {
-    console.log('[Claude Proxy] Extension v4.0.0 activated');
-
-    // Auto-start proxy if not running (ensures proxy is always available)
-    ensureProxyRunning();
+    console.log('[Claude Proxy] Extension v4.2.0 activated');
 
     // Store context for workspaceState access in other functions
     extensionContext = context;
+
+    // Load saved proxy enabled state
+    const savedProxyEnabled = context.globalState.get('antigravity.proxyEnabled');
+    if (savedProxyEnabled !== undefined) {
+        isProxyEnabled = savedProxyEnabled;
+        console.log(`[Claude Proxy] Loaded proxy enabled state: ${isProxyEnabled}`);
+    }
+
+    // Auto-start proxy if not running AND enabled
+    if (isProxyEnabled) {
+        ensureProxyRunning();
+    }
 
     // Generate or retrieve unique window ID
     windowId = context.globalState.get('antigravity.windowId');
@@ -133,10 +143,35 @@ function activate(context) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('antigravity.switchModel', async () => {
+            // Build menu items - toggle at top
+            const toggleLabel = isProxyEnabled ? '$(debug-stop) Disable Proxy' : '$(play) Enable Proxy';
+            const toggleDesc = isProxyEnabled ? 'Stop to use Antigravity Manager' : 'Start proxy';
+            const menuItems = [
+                { label: toggleLabel, description: toggleDesc, action: 'toggle' },
+                { label: '', kind: vscode.QuickPickItemKind.Separator },
+                ...MODELS.map(m => ({ ...m, action: 'model' }))
+            ];
+
+            // Handle disabled state
+            if (!isProxyEnabled) {
+                const selected = await vscode.window.showQuickPick(menuItems, {
+                    placeHolder: 'Proxy disabled - click Enable to start',
+                    title: '$(debug-stop) Proxy Disabled'
+                });
+                if (selected && selected.action === 'toggle') {
+                    isProxyEnabled = true;
+                    extensionContext.globalState.update('antigravity.proxyEnabled', true);
+                    ensureProxyRunning();
+                    updateModelStatusBar();
+                    updateQuotaStatusBar();
+                    vscode.window.showInformationMessage('✅ Proxy enabled!');
+                }
+                return;
+            }
+
             // If proxy is offline, start it automatically when user selects a model
             if (!isProxyOnline) {
-                // Show models but start proxy first
-                const selected = await vscode.window.showQuickPick(MODELS, {
+                const selected = await vscode.window.showQuickPick(menuItems, {
                     placeHolder: 'Proxy offline - selecting a model will start it',
                     title: '🧠 Switch Model (Proxy Starting...)'
                 });
@@ -159,11 +194,20 @@ function activate(context) {
                 return;
             }
 
-            const selected = await vscode.window.showQuickPick(MODELS, {
+            const selected = await vscode.window.showQuickPick(menuItems, {
                 placeHolder: `Current: ${getDisplayName(currentModel)}`,
                 title: '🧠 Switch Model'
             });
             if (selected) {
+                if (selected.action === 'toggle') {
+                    isProxyEnabled = false;
+                    extensionContext.globalState.update('antigravity.proxyEnabled', false);
+                    exec('pm2 stop antigravity-proxy', () => { });
+                    updateModelStatusBar();
+                    updateQuotaStatusBar();
+                    vscode.window.showInformationMessage('⏸️ Proxy stopped. Use Antigravity Manager instead.');
+                    return;
+                }
                 await setModelOnProxy(selected.model);
             }
         })
@@ -224,6 +268,13 @@ function activate(context) {
 
 function updateQuotaStatusBar() {
     if (!quotaStatusBarItem) return;
+
+    // Check if proxy is disabled by user
+    if (!isProxyEnabled) {
+        quotaStatusBarItem.text = '$(account)';
+        quotaStatusBarItem.tooltip = 'Proxy disabled';
+        return;
+    }
 
     // Static tooltip - never changes, prevents flickering
     quotaStatusBarItem.tooltip = 'Click to view quota info';
@@ -764,6 +815,14 @@ function setModelOnProxy(model) {
 
 function updateModelStatusBar() {
     if (!modelStatusBarItem) return;
+
+    // Check if proxy is disabled by user
+    if (!isProxyEnabled) {
+        modelStatusBarItem.text = '$(debug-stop) Disabled';
+        modelStatusBarItem.tooltip = 'Proxy disabled - click to enable';
+        modelStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+        return;
+    }
 
     if (!isProxyOnline) {
         modelStatusBarItem.text = '$(warning) Offline';
