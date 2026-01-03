@@ -198,23 +198,19 @@ function activate(context) {
     }, ACCOUNT_POLL_INTERVAL_MS);
 
     // ==================== WATCH CLAUDE CODE SETTINGS ====================
-    watchClaudeSettings();
+    // DISABLED: Per-window model selection takes priority over global settings
+    // The settings watcher was causing models to switch unexpectedly
+    // watchClaudeSettings();
 
-    // Listen for VS Code configuration changes
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('claudeCode.selectedModel')) {
-                const config = vscode.workspace.getConfiguration('claudeCode');
-                const newModel = config.get('selectedModel');
-                if (newModel && newModel !== currentModel) {
-                    console.log(`[Claude Proxy] Config changed: selectedModel = ${newModel}`);
-                    currentModel = newModel;
-                    updateModelStatusBar();
-                    setModelOnProxy(newModel);
-                }
-            }
-        })
-    );
+    // DISABLED: VS Code config changes should not override window-local model
+    // Per-window model is stored in workspaceState and managed by this extension
+    // context.subscriptions.push(
+    //     vscode.workspace.onDidChangeConfiguration((e) => {
+    //         if (e.affectsConfiguration('claudeCode.selectedModel')) {
+    //             ...
+    //         }
+    //     })
+    // );
 
     context.subscriptions.push({
         dispose: () => {

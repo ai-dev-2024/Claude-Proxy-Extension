@@ -4,20 +4,29 @@ All notable changes to the VS Code extension will be documented in this file.
 
 ---
 
+## [4.1.1] - 2026-01-03
+
+### Fixed
+- **Disabled Settings Watchers** - Removed global settings file watchers that were overriding per-window model selection
+- Claude Code settings.json watcher no longer resets your model
+- VS Code config listener no longer overrides window-local model
+
+---
+
 ## [4.1.0] - 2026-01-03
 
 ### Added
-- **Per-Session Model Isolation**: Each Antigravity window has its own model
+- **Per-Window Model Selection**: Each Antigravity window maintains its own model independently
+- **Workspace Persistence**: Model choice persists per-workspace across restarts
 - **Auto Proxy Restart**: Extension starts proxy if offline when switching models
-- **Session-Based API**: Uses `/session-model` endpoint with window's unique session ID
 
 ### Changed
 - Model switches only affect current window, not other windows
-- Shows "(this window)" in model switch confirmation
+- Shows "(per-window)" in model tooltip
 
 ### Fixed
+- **Model Ping-Pong**: Fixed issue where multiple windows would conflict over model selection
 - **Proxy Entry Point**: Extension now starts `index.js` instead of `server.js`
-- **Model Persistence**: Windows maintain their model across proxy restarts
 
 ---
 
