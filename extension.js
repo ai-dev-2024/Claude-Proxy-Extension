@@ -63,7 +63,7 @@ function ensureProxyRunning() {
         console.log('[Claude Proxy] Proxy offline, starting via PM2...');
         const { exec } = require('child_process');
         // Use pm2 restart first (handles stopped state), fallback to start for first run
-        exec('pm2 restart antigravity-proxy || pm2 start "C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\server.js" --name antigravity-proxy', (error) => {
+        exec('pm2 restart antigravity-proxy || pm2 start "C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\index.js" --name antigravity-proxy', (error) => {
             if (error) {
                 console.log('[Claude Proxy] Failed to start proxy:', error.message);
             } else {
@@ -77,6 +77,30 @@ function ensureProxyRunning() {
     });
 
     req.end();
+}
+
+// Direct PM2 start - called when user clicks Enable or to recover crashed proxy
+function startProxyViaPM2() {
+    const { exec } = require('child_process');
+    const proxyPath = 'C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\index.js';
+
+    console.log('[Claude Proxy] Starting proxy via PM2...');
+    // Try restart first (works if process exists in PM2), otherwise start fresh
+    exec(`pm2 restart antigravity-proxy`, (restartErr) => {
+        if (restartErr) {
+            // Restart failed, try fresh start
+            exec(`pm2 start "${proxyPath}" --name antigravity-proxy`, (startErr) => {
+                if (startErr) {
+                    console.log('[Claude Proxy] PM2 start failed:', startErr.message);
+                    vscode.window.showWarningMessage('Proxy failed to start. Run: pm2 start antigravity-proxy');
+                } else {
+                    console.log('[Claude Proxy] Proxy started fresh via PM2');
+                }
+            });
+        } else {
+            console.log('[Claude Proxy] Proxy restarted via PM2');
+        }
+    });
 }
 
 // ==================== ACTIVATION ====================
@@ -162,7 +186,7 @@ function activate(context) {
                 if (selected && selected.action === 'toggle') {
                     isProxyEnabled = true;
                     extensionContext.globalState.update('antigravity.proxyEnabled', true);
-                    ensureProxyRunning();
+                    startProxyViaPM2();
                     updateModelStatusBar();
                     updateQuotaStatusBar();
                     vscode.window.showInformationMessage('✅ Proxy enabled!');
@@ -190,7 +214,7 @@ function activate(context) {
 
                     // Start the proxy via PM2 for model selection
                     const { exec } = require('child_process');
-                    exec('pm2 restart antigravity-proxy || pm2 start "C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\server.js" --name antigravity-proxy', (error) => {
+                    exec('pm2 restart antigravity-proxy || pm2 start "C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\index.js" --name antigravity-proxy', (error) => {
                         if (error) {
                             vscode.window.showErrorMessage('Failed to start proxy. Run: pm2 restart antigravity-proxy');
                         } else {
