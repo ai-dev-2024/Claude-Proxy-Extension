@@ -4,6 +4,15 @@ All notable changes to the VS Code extension will be documented in this file.
 
 ---
 
+## [4.2.2] - 2026-01-03
+
+### Fixed
+- **Proxy Toggle in Offline State**: Clicking "Disable Proxy" when offline now properly disables the proxy flag instead of trying to start it
+- **Correct Server Path**: Fixed PM2 fallback to use `server.js` instead of `index.js`
+- **Toggle Action Handling**: Model switcher now correctly processes toggle actions in all states (online, offline, disabled)
+
+---
+
 ## [4.2.0] - 2026-01-03
 
 ### Added
