@@ -4,6 +4,24 @@ All notable changes to the VS Code extension will be documented in this file.
 
 ---
 
+## [4.2.0] - 2026-01-03
+
+### Added
+- **One-Click Proxy Toggle**: Enable/Disable proxy directly from model switcher menu
+- Toggle option appears at top of model menu with $(debug-stop) Disable / $(play) Enable icons
+- Disabled state shows warning background in status bar
+- State persists across VS Code restarts
+
+### Changed
+- Model switcher menu now includes toggle separator
+- PM2 proxy process stopped when disabled, started when enabled
+- Auto-start skipped when proxy is disabled
+
+### Fixed
+- Status bar now correctly shows disabled state when proxy is manually disabled
+
+---
+
 ## [4.1.1] - 2026-01-03
 
 ### Fixed
