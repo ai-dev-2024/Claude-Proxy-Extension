@@ -27,7 +27,7 @@ const WINDOW_MODEL_KEY = 'antigravity.windowModel';  // workspaceState key for p
 
 // Configuration
 const PROXY_POLL_INTERVAL_MS = 5000;
-const ACCOUNT_POLL_INTERVAL_MS = 15 * 60 * 1000;  // 15 minutes
+const ACCOUNT_POLL_INTERVAL_MS = 60 * 1000;  // 60 seconds - refresh account frequently
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 
 // Available models for quick switching
@@ -170,9 +170,8 @@ function activate(context) {
         vscode.commands.registerCommand('antigravity.switchModel', async () => {
             // Build menu items - toggle at top
             const toggleLabel = isProxyEnabled ? '$(debug-stop) Disable Proxy' : '$(play) Enable Proxy';
-            const toggleDesc = isProxyEnabled ? 'Stop to use Antigravity Manager' : 'Start proxy';
             const menuItems = [
-                { label: toggleLabel, description: toggleDesc, action: 'toggle' },
+                { label: toggleLabel, action: 'toggle' },
                 { label: '', kind: vscode.QuickPickItemKind.Separator },
                 ...MODELS.map(m => ({ ...m, action: 'model' }))
             ];
@@ -271,10 +270,19 @@ function activate(context) {
         })
     );
 
-    // Periodic account refresh (every 15 minutes to avoid flickering)
+    // Periodic account refresh
     setInterval(() => {
         fetchIDEAccount();
     }, ACCOUNT_POLL_INTERVAL_MS);
+
+    // Refresh account on window focus (catches changes made via Antigravity Manager)
+    context.subscriptions.push(
+        vscode.window.onDidChangeWindowState((windowState) => {
+            if (windowState.focused) {
+                fetchIDEAccount();
+            }
+        })
+    );
 
     // ==================== WATCH CLAUDE CODE SETTINGS ====================
     // DISABLED: Per-window model selection takes priority over global settings
