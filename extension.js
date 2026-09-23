@@ -206,7 +206,7 @@ function activate(context) {
 
                     // Start the proxy via PM2 for model selection
                     const { exec } = require('child_process');
-                    exec('pm2 restart antigravity-proxy || pm2 start "C:\\Users\\Muhib\\Desktop\\Projects\\Antigravity-Claude-Code-Proxy\\Antigravity-Claude-Code-Proxy\\src\\index.js" --name antigravity-proxy', (error) => {
+                    exec('pm2 restart antigravity-proxy || pm2 start "' + path.join(os.homedir(), 'Desktop/Projects/Antigravity-Claude-Code-Proxy/Antigravity-Claude-Code-Proxy/src/index.js') + '" --name antigravity-proxy', (error) => {
                         if (error) {
                             vscode.window.showErrorMessage('Failed to start proxy. Run: pm2 restart antigravity-proxy');
                         } else {
