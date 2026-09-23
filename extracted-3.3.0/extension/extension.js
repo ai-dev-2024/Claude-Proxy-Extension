@@ -33,7 +33,7 @@ const QUOTA_POLL_INTERVAL_MS = 60000; // 60 seconds for quotas (direct API)
 // ==================== GOOGLE OAUTH CONFIG ====================
 const OAUTH_CONFIG = {
     clientId: '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com',
-    clientSecret: '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',
+    clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '', // third-party client secret removed from repo; supply via env if needed
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
     callbackPort: 51122, // Different from proxy to avoid conflicts
